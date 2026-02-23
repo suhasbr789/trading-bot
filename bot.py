@@ -2,13 +2,13 @@ from dhanhq import dhanhq
 import datetime, time, requests, pandas as pd
 
 # ===== LOGIN =====
-client_id="YOUR_CLIENT_ID"
-access_token="YOUR_TOKEN"
+client_id="1107703902"
+access_token="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzcxOTQzOTE4LCJpYXQiOjE3NzE4NTc1MTgsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTA3NzAzOTAyIn0.457ClTQ6m3Dr0PLzvkSNBN7QZ2IX9kMeZkD1HwTrTelRnu8ZhBxC6bRZFIqsj7UtNEff7cUUk9PO1p4bapjavQ"
 dhan=dhanhq(client_id,access_token)
 
 # ===== TELEGRAM =====
-BOT_TOKEN="YOUR_BOT_TOKEN"
-CHAT_ID="YOUR_CHAT_ID"
+BOT_TOKEN="8311404002:AAHQQTDkAS7gu7aU5E98qPqoRNxYWHvv1z4"
+CHAT_ID="7354687306"
 
 def send(msg):
     try:
