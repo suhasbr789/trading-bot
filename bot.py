@@ -1,5 +1,5 @@
 from dhanhq import dhanhq
-import datetime, time, requests, pandas as pd
+import datetime,time,requests,pandas as pd
 
 # ===== LOGIN =====
 client_id="1107703902"
@@ -16,37 +16,40 @@ def send(msg):
                       data={"chat_id":CHAT_ID,"text":msg})
     except: pass
 
-# ===== TELEGRAM COMMAND ENGINE =====
+# ===== TELEGRAM ENGINE =====
 last_update=None
 BOT_RUNNING=True
 
 def get_cmd():
     global last_update
-    r=requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates").json()
-    if r["result"]:
-        upd=r["result"][-1]
-        if last_update!=upd["update_id"]:
-            last_update=upd["update_id"]
-            return upd["message"]["text"].upper()
+    try:
+        r=requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates").json()
+        if r["result"]:
+            upd=r["result"][-1]
+            if "message" in upd:
+                if last_update!=upd["update_id"]:
+                    last_update=upd["update_id"]
+                    return upd["message"]["text"].upper()
+    except: pass
     return None
 
 # ===== SETTINGS =====
 STRIKE_STEP=50
 BUFFER=0.000015
 TRADED=False
-symbol=None
 sec=None
+symbol=None
 sl=None
 entry_time=None
-daily_pnl=0
+direction=None
 
 # ===== CANDLE =====
 def candle():
     data=dhan.historical_minute_data(
         security_id="13",exchange_segment="IDX_I",
         interval="1",
-        from_date=(datetime.datetime.now()-datetime.timedelta(minutes=5)).strftime("%Y-%m-%d"),
-        to_date=datetime.datetime.now().strftime("%Y-%m-%d")
+        from_date=datetime.date.today().strftime("%Y-%m-%d"),
+        to_date=datetime.date.today().strftime("%Y-%m-%d")
     )
     df=pd.DataFrame(data['data'])
     return df.iloc[-1]
@@ -63,17 +66,17 @@ def expiry():
 # ===== SECURITY FINDER =====
 def find_sec(strike,opt):
     chain=dhan.option_chain(security_id="13",exchange_segment="IDX_I")
+    ex=expiry()
     for i in chain['data']:
-        if str(strike) in i['trading_symbol'] and opt in i['trading_symbol']:
-            return i['security_id'],i['trading_symbol']
+        ts=i['trading_symbol']
+        if str(strike) in ts and opt in ts and ex in ts:
+            return i['security_id'],ts
     return None,None
 
 # ===== ORDER =====
 def buy(s): dhan.place_order(security_id=s,exchange_segment="NFO",transaction_type="BUY",quantity=50,order_type="MARKET",product_type="INTRADAY")
 def sell(s): dhan.place_order(security_id=s,exchange_segment="NFO",transaction_type="SELL",quantity=50,order_type="MARKET",product_type="INTRADAY")
 
-# ===== HEARTBEAT =====
-last_ping=time.time()
 send("BOT STARTED")
 
 # ===== MAIN LOOP =====
@@ -81,7 +84,7 @@ while True:
     try:
         now=datetime.datetime.now()
 
-        # TELEGRAM COMMAND
+        # TELEGRAM
         cmd=get_cmd()
         if cmd:
             if cmd=="STOP":
@@ -90,11 +93,9 @@ while True:
                 BOT_RUNNING=True; send("BOT STARTED")
             if cmd=="STATUS":
                 send(f"BOT:{BOT_RUNNING} TRADE:{TRADED}")
-            if cmd=="EXIT" and TRADED:
-                sell(sec); TRADED=False; send("POSITION EXITED")
             if cmd=="PANIC":
                 if TRADED: sell(sec)
-                TRADED=False; send("PANIC CLOSE ALL")
+                TRADED=False; send("PANIC CLOSE")
 
         # ENTRY
         if BOT_RUNNING and now.hour==15 and now.minute==0 and not TRADED:
@@ -109,39 +110,40 @@ while True:
                 strike=a-STRIKE_STEP
                 sec,symbol=find_sec(strike,"CE")
                 if sec:
-                    buy(sec); sl=lo; entry_time=datetime.datetime.now(); TRADED=True
+                    buy(sec)
+                    sl=lo
+                    direction="LONG"
+                    entry_time=datetime.datetime.now()
+                    TRADED=True
                     send(f"ENTRY LONG {symbol}")
 
             elif abs(op-hi)<=buf:
                 strike=a+STRIKE_STEP
                 sec,symbol=find_sec(strike,"PE")
                 if sec:
-                    buy(sec); sl=hi; entry_time=datetime.datetime.now(); TRADED=True
+                    buy(sec)
+                    sl=hi
+                    direction="SHORT"
+                    entry_time=datetime.datetime.now()
+                    TRADED=True
                     send(f"ENTRY SHORT {symbol}")
 
         # MONITOR
         if TRADED:
-            c=candle(); price=float(c['close'])
+            c=candle()
+            price=float(c['close'])
 
-            if price<=sl or price>=sl:
-                sell(sec); TRADED=False; send(f"SL HIT {symbol}")
+            if direction=="LONG" and price<=sl:
+                sell(sec); TRADED=False; send("SL HIT LONG")
+
+            if direction=="SHORT" and price>=sl:
+                sell(sec); TRADED=False; send("SL HIT SHORT")
 
             if (datetime.datetime.now()-entry_time).seconds>900:
-                sell(sec); TRADED=False; send(f"TIME EXIT {symbol}")
+                sell(sec); TRADED=False; send("TIME EXIT")
 
-        # HEARTBEAT
-        if time.time()-last_ping>600:
-            send("BOT ALIVE"); last_ping=time.time()
-
-        # DAILY SUMMARY
-        if now.hour==15 and now.minute==30:
-            send(f"DAILY PNL {daily_pnl}")
-
-        time.sleep(2)
+        time.sleep(5)
 
     except Exception as e:
         send(f"ERROR {e}")
         time.sleep(5)
-
-while True:
-    time.sleep(60)
