@@ -142,3 +142,6 @@ while True:
     except Exception as e:
         send(f"ERROR {e}")
         time.sleep(5)
+
+while True:
+    time.sleep(60)
